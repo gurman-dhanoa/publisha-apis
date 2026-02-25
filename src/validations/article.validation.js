@@ -1,4 +1,4 @@
-const yup = require('yup');
+const yup = require("yup");
 
 const articleSchema = {
   create: yup.object({
@@ -9,8 +9,8 @@ const articleSchema = {
       image_url: yup.string().url(),
       author_id: yup.number().required(),
       categories: yup.array().of(yup.number()).min(1).required(),
-      status: yup.string().oneOf(['draft', 'published']).default('draft')
-    })
+      status: yup.string().oneOf(["draft", "published"]).default("draft"),
+    }),
   }),
 
   update: yup.object({
@@ -20,36 +20,48 @@ const articleSchema = {
       content: yup.string().min(100),
       image_url: yup.string().url(),
       categories: yup.array().of(yup.number()),
-      status: yup.string().oneOf(['draft', 'published'])
+      status: yup.string().oneOf(["draft", "published"]),
     }),
     params: yup.object({
-      id: yup.number().required()
-    })
+      id: yup.number().required(),
+    }),
   }),
 
   getById: yup.object({
     params: yup.object({
-      id: yup.number().required()
-    })
+      id: yup.number().required(),
+    }),
   }),
 
   getBySlug: yup.object({
     params: yup.object({
-      slug: yup.string().required()
-    })
+      slug: yup.string().required(),
+    }),
   }),
 
   getAll: yup.object({
     query: yup.object({
       page: yup.number().min(1).default(1),
       limit: yup.number().min(1).max(50).default(10),
-      status: yup.string().oneOf(['draft', 'published']),
+      status: yup.string().oneOf(["draft", "published"]),
       category: yup.string(),
       author: yup.number(),
       search: yup.string(),
-      sort: yup.string().oneOf(['latest', 'popular', 'trending'])
-    })
-  })  
+      sort: yup.string().oneOf(["latest", "popular", "trending"]),
+    }),
+  }),
+
+  globalSearch: yup.object({
+    query: yup.object({
+      q: yup
+        .string()
+        .required("Search query is required")
+        .min(2, "Search query must be at least 2 characters")
+        .max(100, "Search query too long"),
+      limit: yup.number().min(1).max(20).default(10),
+    }),
+  }),
+  
 };
 
 module.exports = articleSchema;

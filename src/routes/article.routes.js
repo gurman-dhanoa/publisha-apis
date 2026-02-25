@@ -6,6 +6,12 @@ const articleSchema = require('../validations/article.validation');
 const authMiddleware = require('../middleware/auth');
 
 // Public routes
+router.get(
+  '/search', 
+  validate(articleSchema.globalSearch), 
+  articleController.globalSearch
+);
+
 router.get('/', 
   validate(articleSchema.getAll), 
   articleController.getAll

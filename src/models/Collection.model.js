@@ -83,13 +83,38 @@ class Collection {
 
   static async getByAuthor(authorId) {
     const sql = `
-      SELECT c.*, 
-        (SELECT COUNT(*) FROM collection_articles WHERE collection_id = c.id) as articles_count
-      FROM collections c
-      WHERE c.author_id = ?
-      ORDER BY c.created_at DESC
+    SELECT 
+      c.*, 
+      au.name as author_name,
+      (SELECT COUNT(*) FROM collection_articles WHERE collection_id = c.id) as articles_count,
+      IFNULL((
+        SELECT SUM(a.views_count) 
+        FROM articles a 
+        INNER JOIN collection_articles ca ON a.id = ca.article_id 
+        WHERE ca.collection_id = c.id
+      ), 0) as total_collection_views
+    FROM collections c
+    LEFT JOIN authors au ON c.author_id = au.id
+    WHERE c.author_id = ?
+    ORDER BY c.created_at DESC
+  `;
+
+    const collections = await DB.query(sql, [authorId]);
+
+    // Fetch preview articles for each collection
+    for (let collection of collections) {
+      const previewSql = `
+      SELECT a.id, a.title, a.image_url, a.slug 
+      FROM articles a
+      INNER JOIN collection_articles ca ON a.id = ca.article_id
+      WHERE ca.collection_id = ?
+      ORDER BY ca.added_at DESC
+      LIMIT 3
     `;
-    return await DB.query(sql, [authorId]);
+      collection.preview_articles = await DB.query(previewSql, [collection.id]);
+    }
+
+    return collections;
   }
 
   static async getArticles(collectionId) {

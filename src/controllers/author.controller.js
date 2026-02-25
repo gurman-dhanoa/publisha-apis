@@ -105,13 +105,13 @@ const authorController = {
         });
       }
 
-      const articles = await Author.getArticles(author.id, {
-        status: "published",
-      });
+      // const articles = await Author.getArticles(author.id, {
+      //   status: "published",
+      // });
 
       res.json({
         success: true,
-        data: { ...author, articles },
+        data: { ...author },
       });
     } catch (error) {
       next(error);
@@ -163,15 +163,15 @@ const authorController = {
   // Get author stats
   async getStats(req, res, next) {
     try {
-      const authorId = parseInt(req.params.id) || req.user.id;
+      const authorId = parseInt(req.params.id);
 
       // Verify access
-      if (parseInt(req.params.id) && req.params.id != req.user.id) {
-        return res.status(403).json({
-          success: false,
-          error: "Unauthorized",
-        });
-      }
+      // if (parseInt(req.params.id) && req.params.id != req.user.id) {
+      //   return res.status(403).json({
+      //     success: false,
+      //     error: "Unauthorized",
+      //   });
+      // }
 
       const articles = await Author.getArticles(authorId);
 

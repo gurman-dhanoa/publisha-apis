@@ -1,6 +1,6 @@
-const Collection = require('../models/Collection.model');
-const Article = require('../models/Article.model');
-const logger = require('../utils/logger');
+const Collection = require("../models/Collection.model");
+const Article = require("../models/Article.model");
+const logger = require("../utils/logger");
 
 const collectionController = {
   // Create collection
@@ -10,7 +10,7 @@ const collectionController = {
       if (req.body.author_id !== req.user.id) {
         return res.status(403).json({
           success: false,
-          error: 'Unauthorized'
+          error: "Unauthorized",
         });
       }
 
@@ -18,7 +18,7 @@ const collectionController = {
 
       res.status(201).json({
         success: true,
-        data: collection
+        data: collection,
       });
     } catch (error) {
       next(error);
@@ -32,13 +32,13 @@ const collectionController = {
       if (!collection) {
         return res.status(404).json({
           success: false,
-          error: 'Collection not found'
+          error: "Collection not found",
         });
       }
 
       res.json({
         success: true,
-        data: collection
+        data: collection,
       });
     } catch (error) {
       next(error);
@@ -52,13 +52,13 @@ const collectionController = {
       if (!collection) {
         return res.status(404).json({
           success: false,
-          error: 'Collection not found'
+          error: "Collection not found",
         });
       }
 
       res.json({
         success: true,
-        data: collection
+        data: collection,
       });
     } catch (error) {
       next(error);
@@ -72,7 +72,7 @@ const collectionController = {
       if (!collection) {
         return res.status(404).json({
           success: false,
-          error: 'Collection not found'
+          error: "Collection not found",
         });
       }
 
@@ -80,7 +80,7 @@ const collectionController = {
       if (collection.author_id !== req.user.id) {
         return res.status(403).json({
           success: false,
-          error: 'Unauthorized'
+          error: "Unauthorized",
         });
       }
 
@@ -88,7 +88,7 @@ const collectionController = {
 
       res.json({
         success: true,
-        data: updated
+        data: updated,
       });
     } catch (error) {
       next(error);
@@ -102,7 +102,7 @@ const collectionController = {
       if (!collection) {
         return res.status(404).json({
           success: false,
-          error: 'Collection not found'
+          error: "Collection not found",
         });
       }
 
@@ -110,7 +110,7 @@ const collectionController = {
       if (collection.author_id !== req.user.id) {
         return res.status(403).json({
           success: false,
-          error: 'Unauthorized'
+          error: "Unauthorized",
         });
       }
 
@@ -118,7 +118,7 @@ const collectionController = {
 
       res.json({
         success: true,
-        message: 'Collection deleted successfully'
+        message: "Collection deleted successfully",
       });
     } catch (error) {
       next(error);
@@ -133,7 +133,8 @@ const collectionController = {
 
       res.json({
         success: true,
-        data: collections
+        count: collections.length,
+        data: collections,
       });
     } catch (error) {
       next(error);
@@ -147,7 +148,7 @@ const collectionController = {
       if (!collection) {
         return res.status(404).json({
           success: false,
-          error: 'Collection not found'
+          error: "Collection not found",
         });
       }
 
@@ -155,7 +156,7 @@ const collectionController = {
       if (collection.author_id !== req.user.id) {
         return res.status(403).json({
           success: false,
-          error: 'Unauthorized'
+          error: "Unauthorized",
         });
       }
 
@@ -164,7 +165,7 @@ const collectionController = {
 
       res.json({
         success: true,
-        data: updated
+        data: updated,
       });
     } catch (error) {
       next(error);
@@ -175,12 +176,12 @@ const collectionController = {
   async removeArticle(req, res, next) {
     try {
       const { collectionId, articleId } = req.params;
-      
+
       const collection = await Collection.findById(collectionId);
       if (!collection) {
         return res.status(404).json({
           success: false,
-          error: 'Collection not found'
+          error: "Collection not found",
         });
       }
 
@@ -188,7 +189,7 @@ const collectionController = {
       if (collection.author_id !== req.user.id) {
         return res.status(403).json({
           success: false,
-          error: 'Unauthorized'
+          error: "Unauthorized",
         });
       }
 
@@ -197,7 +198,7 @@ const collectionController = {
 
       res.json({
         success: true,
-        data: updated
+        data: updated,
       });
     } catch (error) {
       next(error);
@@ -208,12 +209,15 @@ const collectionController = {
   async checkArticle(req, res, next) {
     try {
       const { collectionId, articleId } = req.params;
-      
-      const isInCollection = await Collection.isArticleInCollection(collectionId, articleId);
-      
+
+      const isInCollection = await Collection.isArticleInCollection(
+        collectionId,
+        articleId,
+      );
+
       res.json({
         success: true,
-        data: { isInCollection }
+        data: { isInCollection },
       });
     } catch (error) {
       next(error);
@@ -223,7 +227,7 @@ const collectionController = {
   async getPopular(req, res, next) {
     try {
       const limit = parseInt(req.query.limit) || 6;
-      
+
       // Protection against massive queries
       const safeLimit = Math.min(limit, 20);
 
@@ -232,12 +236,12 @@ const collectionController = {
       res.json({
         success: true,
         count: collections.length,
-        data: collections
+        data: collections,
       });
     } catch (error) {
       next(error);
     }
-  }
+  },
 };
 
 module.exports = collectionController;

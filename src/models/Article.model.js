@@ -1,6 +1,64 @@
 const DB = require("../utils/db");
 
 class Article {
+  static async globalSearch(query, limit = 10) {
+    const searchTerm = `%${query}%`;
+
+    const sql = `
+    -- Search Articles
+    (SELECT 
+        id, 
+        title AS name, 
+        slug, 
+        'article' AS type, 
+        image_url, 
+        created_at 
+     FROM articles 
+     WHERE (title LIKE ? OR summary LIKE ?) AND status = 'published')
+    
+    UNION ALL
+
+    -- Search Authors
+    (SELECT 
+        id, 
+        name, 
+        id AS slug, -- Authors don't have slugs in your current schema
+        'author' AS type, 
+        avatar_url AS image_url, 
+        created_at 
+     FROM authors 
+     WHERE name LIKE ? OR bio LIKE ?)
+
+    UNION ALL
+
+    -- Search Collections
+    (SELECT 
+        id, 
+        name, 
+        slug, 
+        'collection' AS type, 
+        NULL AS image_url, 
+        created_at 
+     FROM collections 
+     WHERE name LIKE ? OR description LIKE ?)
+
+    ORDER BY name ASC
+    LIMIT ?
+  `;
+
+    const params = [
+      searchTerm,
+      searchTerm, // Articles
+      searchTerm,
+      searchTerm, // Authors
+      searchTerm,
+      searchTerm, // Collections
+      parseInt(limit),
+    ];
+
+    return await DB.query(sql, params);
+  }
+
   static async findById(id) {
     const sql = `
       SELECT a.*, 

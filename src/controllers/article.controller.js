@@ -1,7 +1,29 @@
 const Article = require("../models/Article.model");
-const logger = require("../utils/logger");
 
 const articleController = {
+  async globalSearch(req, res, next) {
+    try {
+      const { q, limit } = req.query;
+
+      if (!q || q.trim().length < 2) {
+        return res.status(400).json({
+          success: false,
+          error: "Search query must be at least 2 characters",
+        });
+      }
+
+      const results = await Article.globalSearch(q, limit);
+
+      res.json({
+        success: true,
+        count: results.length,
+        data: results,
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+
   // Create article
   async create(req, res, next) {
     try {
@@ -173,7 +195,6 @@ const articleController = {
       next(error);
     }
   },
-
 };
 
 module.exports = articleController;

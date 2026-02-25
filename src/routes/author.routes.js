@@ -30,6 +30,10 @@ router.get('/:id',
   authorController.getById
 );
 
+router.get('/:id/stats', 
+  authorController.getStats
+);
+
 // Protected routes
 router.use(authMiddleware); // All routes below require auth
 
@@ -40,10 +44,6 @@ router.get('/profile/me',
 router.put('/:id', 
   validate(authorSchema.update), 
   authorController.update
-);
-
-router.get('/:id/stats', 
-  authorController.getStats
 );
 
 module.exports = router;

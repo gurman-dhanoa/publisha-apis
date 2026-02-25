@@ -5,11 +5,33 @@ class Author {
   // Find by ID
   static async findById(id) {
     const sql = `
-      SELECT id, name, email, bio, preferred_categories, avatar_url, created_at, updated_at
-      FROM authors 
-      WHERE id = ?
-    `;
-    return await DB.getOne(sql, [id]);
+    SELECT 
+      au.id, au.name, au.email, au.bio, au.avatar_url, au.created_at, au.updated_at,
+      (
+        SELECT GROUP_CONCAT(
+          JSON_OBJECT('id', c.id, 'name', c.name, 'slug', c.slug)
+        )
+        FROM categories c
+        WHERE JSON_CONTAINS(au.preferred_categories, CAST(c.id AS CHAR))
+      ) as categories_raw
+    FROM authors au
+    WHERE au.id = ?
+  `;
+
+    const author = await DB.getOne(sql, [id]);
+
+    if (author) {
+      // Convert the GROUP_CONCAT string back into a clean JSON array
+      if (author.categories_raw) {
+        author.preferred_categories = JSON.parse(`[${author.categories_raw}]`);
+      } else {
+        author.preferred_categories = [];
+      }
+      // Remove the raw string helper property
+      delete author.categories_raw;
+    }
+
+    return author;
   }
 
   // Find by email
@@ -130,7 +152,7 @@ class Author {
       },
     };
   }
-  
+
   // Get author articles
   static async getArticles(authorId, { status, page = 1, limit = 10 } = {}) {
     const offset = (page - 1) * limit;
