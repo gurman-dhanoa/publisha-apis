@@ -3,7 +3,7 @@ const pool = require('../config/database');
 class DB {
   static async query(sql, params = []) {
     try {
-      const [results] = await pool.execute(sql, params);
+      const [results] = await pool.query(sql, params);
       return results;
     } catch (error) {
       throw error;
@@ -21,7 +21,7 @@ class DB {
     const placeholders = keys.map(() => '?').join(', ');
     
     const sql = `INSERT INTO ${table} (${keys.join(', ')}) VALUES (${placeholders})`;
-    const [result] = await pool.execute(sql, values);
+    const [result] = await pool.query(sql, values);
     return result;
   }
 
@@ -32,7 +32,7 @@ class DB {
     const sql = `UPDATE ${table} SET ${setClause} WHERE ${where}`;
     const params = [...Object.values(data), ...whereParams];
     
-    const [result] = await pool.execute(sql, params);
+    const [result] = await pool.query(sql, params);
     return result;
   }
 }
