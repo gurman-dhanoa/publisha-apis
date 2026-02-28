@@ -164,107 +164,6 @@ class Article {
     return await DB.query(sql, [id]);
   }
 
-  // static async findAll({
-  //   status = "published",
-  //   category,
-  //   author,
-  //   search,
-  //   page = 1,
-  //   limit = 10,
-  //   sort = "latest",
-  // } = {}) {
-  //   const offset = (page - 1) * limit;
-  //   let sql = `
-  //     SELECT a.*,
-  //       au.name as author_name, au.avatar_url as author_avatar,
-  //       (SELECT COUNT(*) FROM likes WHERE article_id = a.id) as likes_count,
-  //       (SELECT COUNT(*) FROM views WHERE article_id = a.id) as views_count,
-  //       (SELECT AVG(rating) FROM reviews WHERE article_id = a.id) as avg_rating
-  //     FROM articles a
-  //     LEFT JOIN authors au ON a.author_id = au.id
-  //   `;
-
-  //   const params = [];
-  //   const whereClauses = [];
-
-  //   if (category) {
-  //     sql += ` INNER JOIN article_categories ac ON a.id = ac.article_id
-  //              INNER JOIN categories c ON ac.category_id = c.id`;
-  //     whereClauses.push("c.slug = ?");
-  //     params.push(category);
-  //   }
-
-  //   if (status) {
-  //     whereClauses.push("a.status = ?");
-  //     params.push(status);
-  //   }
-
-  //   if (author) {
-  //     whereClauses.push("a.author_id = ?");
-  //     params.push(author);
-  //   }
-
-  //   if (search) {
-  //     whereClauses.push(
-  //       "MATCH(a.title, a.summary, a.content) AGAINST(? IN BOOLEAN MODE)",
-  //     );
-  //     params.push(`*${search}*`);
-  //   }
-
-  //   if (whereClauses.length > 0) {
-  //     sql += " WHERE " + whereClauses.join(" AND ");
-  //   }
-
-  //   // Sorting
-  //   switch (sort) {
-  //     case "popular":
-  //       sql += " ORDER BY views_count DESC";
-  //       break;
-  //     case "trending":
-  //       sql += " ORDER BY likes_count DESC";
-  //       break;
-  //     default:
-  //       sql += " ORDER BY a.published_at DESC";
-  //   }
-
-  //   sql += " LIMIT ? OFFSET ?";
-  //   params.push(limit, offset);
-
-  //   const articles = await DB.query(sql, params);
-
-  //   // Get categories for each article
-  //   for (let article of articles) {
-  //     article.categories = await this.getCategories(article.id);
-  //   }
-
-  //   // Get total count
-  //   let countSql = "SELECT COUNT(*) as total FROM articles a";
-
-  //   // If filtering by category, we MUST join categories in the count query too
-  //   if (category) {
-  //     countSql += ` INNER JOIN article_categories ac ON a.id = ac.article_id
-  //               INNER JOIN categories c ON ac.category_id = c.id`;
-  //   }
-
-  //   if (whereClauses.length > 0) {
-  //     countSql += " WHERE " + whereClauses.join(" AND ");
-  //   }
-
-  //   // Ensure params matches the number of '?' in countSql
-  //   // We slice off the last 2 params because count query doesn't use LIMIT and OFFSET
-  //   const [total] = await DB.query(countSql, params.slice(0, -2));
-
-  //   return {
-  //     data: articles,
-  //     pagination: {
-  //       page: parseInt(page),
-  //       limit: parseInt(limit),
-  //       total: total.total,
-  //       pages: Math.ceil(total.total / limit),
-  //     },
-  //   };
-  // }
-
   static async findAll({
     status = "published",
     category,
@@ -274,13 +173,15 @@ class Article {
     limit = 10,
     sort = "latest",
   } = {}) {
-    // 1. Force types to Numbers to fix the SQL syntax error ('7' vs 7)
-    const numericLimit = Math.max(1, parseInt(limit, 10));
-    const numericPage = Math.max(1, parseInt(page, 10));
-    const numericOffset = (numericPage - 1) * numericLimit;
+    page = parseInt(page, 10);
+    limit = parseInt(limit, 10);
 
+    if (isNaN(page) || page < 1) page = 1;
+    if (isNaN(limit) || limit < 1) limit = 10;
+
+    const offset = (page - 1) * limit;
     let sql = `
-      SELECT a.*, 
+      SELECT a.*,
         au.name as author_name, au.avatar_url as author_avatar,
         (SELECT COUNT(*) FROM likes WHERE article_id = a.id) as likes_count,
         (SELECT COUNT(*) FROM views WHERE article_id = a.id) as views_count,
@@ -292,10 +193,9 @@ class Article {
     const params = [];
     const whereClauses = [];
 
-    // 2. Build Joins and Filters
     if (category) {
       sql += ` INNER JOIN article_categories ac ON a.id = ac.article_id
-               INNER JOIN categories c ON ac.category_id = c.id `;
+               INNER JOIN categories c ON ac.category_id = c.id`;
       whereClauses.push("c.slug = ?");
       params.push(category);
     }
@@ -317,58 +217,56 @@ class Article {
       params.push(`*${search}*`);
     }
 
-    // 3. Apply WHERE
     if (whereClauses.length > 0) {
       sql += " WHERE " + whereClauses.join(" AND ");
     }
 
-    // 4. Sorting
+    // Sorting
     switch (sort) {
       case "popular":
-        sql += " ORDER BY views_count DESC ";
+        sql += " ORDER BY views_count DESC";
         break;
       case "trending":
-        sql += " ORDER BY likes_count DESC ";
+        sql += " ORDER BY likes_count DESC";
         break;
       default:
-        sql += " ORDER BY a.published_at DESC ";
+        sql += " ORDER BY a.published_at DESC";
     }
 
-    // 5. Final Pagination (using numeric parameters)
-    sql += " LIMIT ? OFFSET ? ";
-    const queryParams = [...params, numericLimit, numericOffset];
+    sql += " LIMIT ? OFFSET ?";
+    params.push(limit, offset);
 
-    // Execute Main Query
-    const [articles] = await DB.query(sql, queryParams);
+    const articles = await DB.query(sql, params);
 
-    // 6. Get total count for pagination (Independent query)
-    let countSql = " SELECT COUNT(DISTINCT a.id) as total FROM articles a ";
+    // Get categories for each article
+    for (let article of articles) {
+      article.categories = await this.getCategories(article.id);
+    }
 
+    // Get total count
+    let countSql = "SELECT COUNT(*) as total FROM articles a";
+
+    // If filtering by category, we MUST join categories in the count query too
     if (category) {
       countSql += ` INNER JOIN article_categories ac ON a.id = ac.article_id
-                    INNER JOIN categories c ON ac.category_id = c.id `;
+                INNER JOIN categories c ON ac.category_id = c.id`;
     }
 
     if (whereClauses.length > 0) {
       countSql += " WHERE " + whereClauses.join(" AND ");
     }
 
-    // Note: We use the original 'params' array here, which DOES NOT include limit/offset
-    const [countResult] = await DB.query(countSql, params);
-    const totalCount = countResult[0]?.total || 0;
-
-    // 7. Get categories for each article
-    for (let article of articles) {
-      article.categories = await this.getCategories(article.id);
-    }
+    // Ensure params matches the number of '?' in countSql
+    // We slice off the last 2 params because count query doesn't use LIMIT and OFFSET
+    const [total] = await DB.query(countSql, params.slice(0, -2));
 
     return {
       data: articles,
       pagination: {
-        page: numericPage,
-        limit: numericLimit,
-        total: totalCount,
-        pages: Math.ceil(totalCount / numericLimit),
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total: total.total,
+        pages: Math.ceil(total.total / limit),
       },
     };
   }
