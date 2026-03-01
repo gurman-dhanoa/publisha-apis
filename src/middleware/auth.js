@@ -1,9 +1,8 @@
-const jwt = require('jsonwebtoken');
+const jwt = require("jsonwebtoken");
 
 const authMiddleware = async (req, res, next) => {
   try {
-    const token = req.header('Authorization')?.replace('Bearer ', '');
-    
+    const token = req.header("Authorization")?.replace("Bearer ", "");
     if (!token) {
       throw new Error();
     }
@@ -12,7 +11,7 @@ const authMiddleware = async (req, res, next) => {
     req.user = decoded;
     next();
   } catch (error) {
-    res.status(401).json({ error: 'Please authenticate' });
+    res.status(401).json({ error: "Please authenticate" });
   }
 };
 

@@ -1,4 +1,5 @@
 const Article = require("../models/Article.model");
+const { uploadFile } = require('../utils/s3');
 
 const articleController = {
   async globalSearch(req, res, next) {
@@ -25,21 +26,101 @@ const articleController = {
   },
 
   // Create article
+  // async create(req, res, next) {
+  //   try {
+  //     // Ensure author_id matches authenticated user
+  //     if (req.body.author_id !== req.user.id) {
+  //       return res.status(403).json({
+  //         success: false,
+  //         error: "Unauthorized",
+  //       });
+  //     }
+
+  //     const article = await Article.create(req.body);
+
+  //     res.status(201).json({
+  //       success: true,
+  //       data: article,
+  //     });
+  //   } catch (error) {
+  //     next(error);
+  //   }
+  // },
+
   async create(req, res, next) {
     try {
-      // Ensure author_id matches authenticated user
-      if (req.body.author_id !== req.user.id) {
-        return res.status(403).json({
-          success: false,
-          error: "Unauthorized",
-        });
+      const data = req.body;
+
+      // 1. Force Author ID (Security)
+      data.author_id = req.user.id;
+
+      // 2. Handle Image Upload
+      if (req.file) {
+        const imageUrl = await uploadFile(req.file);
+        data.image_url = imageUrl;
       }
 
-      const article = await Article.create(req.body);
+      // 3. Parse Categories (FormData sends arrays as JSON strings)
+      if (data.categories) {
+        try {
+          data.categories = JSON.parse(data.categories);
+        } catch (e) {
+          data.categories = []; // Fallback if parsing fails
+        }
+      }
+
+      const article = await Article.create(data);
 
       res.status(201).json({
         success: true,
         data: article,
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  // --- UPDATE ---
+  async update(req, res, next) {
+    try {
+      const articleId = req.params.id;
+      const data = req.body;
+
+      // 1. Fetch existing to check ownership
+      const existingArticle = await Article.findById(articleId);
+      
+      if (!existingArticle) {
+        return res.status(404).json({ success: false, error: "Article not found" });
+      }
+
+      // 2. Strict Ownership Check
+      if (existingArticle.author_id !== req.user.id) {
+        return res.status(403).json({ 
+          success: false, 
+          error: "Unauthorized: You do not own this content." 
+        });
+      }
+
+      // 3. Handle New Image Upload
+      if (req.file) {
+        const imageUrl = await uploadFile(req.file);
+        data.image_url = imageUrl;
+      }
+
+      // 4. Parse Categories
+      if (data.categories) {
+        try {
+          data.categories = JSON.parse(data.categories);
+        } catch (e) {
+          delete data.categories; // Don't update if format is invalid
+        }
+      }
+
+      const updated = await Article.update(articleId, data);
+
+      res.json({
+        success: true,
+        data: updated,
       });
     } catch (error) {
       next(error);
@@ -95,34 +176,34 @@ const articleController = {
   },
 
   // Update article
-  async update(req, res, next) {
-    try {
-      const article = await Article.findById(req.params.id);
-      if (!article) {
-        return res.status(404).json({
-          success: false,
-          error: "Article not found",
-        });
-      }
+  // async update(req, res, next) {
+  //   try {
+  //     const article = await Article.findById(req.params.id);
+  //     if (!article) {
+  //       return res.status(404).json({
+  //         success: false,
+  //         error: "Article not found",
+  //       });
+  //     }
 
-      // Ensure user owns the article
-      if (article.author_id !== req.user.id) {
-        return res.status(403).json({
-          success: false,
-          error: "Unauthorized",
-        });
-      }
+  //     // Ensure user owns the article
+  //     if (article.author_id !== req.user.id) {
+  //       return res.status(403).json({
+  //         success: false,
+  //         error: "Unauthorized",
+  //       });
+  //     }
 
-      const updated = await Article.update(req.params.id, req.body);
+  //     const updated = await Article.update(req.params.id, req.body);
 
-      res.json({
-        success: true,
-        data: updated,
-      });
-    } catch (error) {
-      next(error);
-    }
-  },
+  //     res.json({
+  //       success: true,
+  //       data: updated,
+  //     });
+  //   } catch (error) {
+  //     next(error);
+  //   }
+  // },
 
   // Delete article
   async delete(req, res, next) {
@@ -157,7 +238,7 @@ const articleController = {
   // Get all articles
   async getAll(req, res, next) {
     try {
-      const result = await Article.findAll(req.query);
+      const result = await Article.findAll({...req.query, currentUserId: req.user ? req.user.id : null});
 
       res.json({
         success: true,

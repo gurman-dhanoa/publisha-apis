@@ -4,6 +4,13 @@ const articleController = require('../controllers/article.controller');
 const validate = require('../middleware/validate');
 const articleSchema = require('../validations/article.validation');
 const authMiddleware = require('../middleware/auth');
+const optionalAuth = require('../middleware/optionalAuth');
+const multer = require('multer');
+
+const upload = multer({ 
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
+});
 
 // Public routes
 router.get(
@@ -13,7 +20,8 @@ router.get(
 );
 
 router.get('/', 
-  validate(articleSchema.getAll), 
+  validate(articleSchema.getAll),
+  optionalAuth,
   articleController.getAll
 );
 
@@ -35,12 +43,14 @@ router.get('/:id',
 router.use(authMiddleware);
 
 router.post('/', 
-  validate(articleSchema.create), 
+  upload.single('featuredImage'),
+  // validate(articleSchema.create), 
   articleController.create
 );
 
 router.put('/:id', 
-  validate(articleSchema.update), 
+  upload.single('featuredImage'),
+  // validate(articleSchema.update), 
   articleController.update
 );
 
