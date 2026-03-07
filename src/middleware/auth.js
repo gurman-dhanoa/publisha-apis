@@ -5,7 +5,7 @@ const authMiddleware = (req, res, next) => {
   try {
     // Standardize header extraction (handles different casing)
     const authHeader = req.headers.authorization || req.headers.Authorization;
-    
+
     if (!authHeader?.startsWith("Bearer ")) {
       throw new ApiError(401, "Unauthorized request: No token provided");
     }
@@ -34,9 +34,21 @@ const authMiddleware = (req, res, next) => {
       next(new ApiError(401, "Invalid authentication token."));
     } else {
       // Pass our custom ApiError directly to the global handler
-      next(error instanceof ApiError ? error : new ApiError(401, "Authentication failed"));
+      next(
+        error instanceof ApiError
+          ? error
+          : new ApiError(401, "Authentication failed"),
+      );
     }
   }
 };
 
-module.exports = authMiddleware;
+const requireAdmin = (req, res, next) => {
+  // Check specifically for the adminId assigned during the Admin login flow
+  if (!req.user || !req.user.adminId) {
+    return next(new ApiError(403, "Access denied. Admin privileges required."));
+  }
+  next();
+};
+
+module.exports = { authMiddleware, requireAdmin };
