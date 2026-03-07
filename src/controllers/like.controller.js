@@ -1,111 +1,48 @@
 const Like = require('../models/Like.model');
 const Article = require('../models/Article.model');
-const logger = require('../utils/logger');
+const catchAsync = require('../utils/catchAsync');
+const ApiResponse = require('../utils/ApiResponse');
+const ApiError = require('../utils/ApiError');
 
 const likeController = {
-  // Toggle like (create or delete)
-  async toggle(req, res, next) {
-    try {
-      const { articleId } = req.params;
-      
-      // Check if article exists
-      const article = await Article.findById(articleId);
-      if (!article) {
-        return res.status(404).json({
-          success: false,
-          error: 'Article not found'
-        });
-      }
+  toggle: catchAsync(async (req, res) => {
+    const { articleId } = req.params;
+    const article = await Article.findById(articleId);
+    if (!article) throw new ApiError(404, 'Article not found');
 
-      // Check if already liked
-      const isLiked = await Like.check(articleId, req.user.id);
-      
-      if (isLiked) {
-        await Like.delete(articleId, req.user.id);
-        const likesCount = await Like.count(articleId);
-        
-        return res.json({
-          success: true,
-          data: { liked: false, likes_count: likesCount }
-        });
-      } else {
-        await Like.create(articleId, req.user.id);
-        const likesCount = await Like.count(articleId);
-        
-        return res.json({
-          success: true,
-          data: { liked: true, likes_count: likesCount }
-        });
-      }
-    } catch (error) {
-      next(error);
+    const isLiked = await Like.check(articleId, req.user.id);
+    
+    if (isLiked) {
+      await Like.delete(articleId, req.user.id);
+      const likesCount = await Like.count(articleId);
+      return res.status(200).json(new ApiResponse(200, { liked: false, likes_count: likesCount }, "Unliked"));
+    } else {
+      await Like.create(articleId, req.user.id);
+      const likesCount = await Like.count(articleId);
+      return res.status(200).json(new ApiResponse(200, { liked: true, likes_count: likesCount }, "Liked"));
     }
-  },
+  }),
 
-  // Get likes by article
-  async getByArticle(req, res, next) {
-    try {
-      const { articleId } = req.params;
-      
-      const article = await Article.findById(articleId);
-      if (!article) {
-        return res.status(404).json({
-          success: false,
-          error: 'Article not found'
-        });
-      }
+  getByArticle: catchAsync(async (req, res) => {
+    const { articleId } = req.params;
+    const article = await Article.findById(articleId);
+    if (!article) throw new ApiError(404, 'Article not found');
 
-      const likes = await Like.findByArticle(articleId);
-      const count = await Like.count(articleId);
-      
-      // Check if current user liked this article
-      let userLiked = false;
-      if (req.user) {
-        userLiked = await Like.check(articleId, req.user.id);
-      }
+    const likes = await Like.findByArticle(articleId);
+    const count = await Like.count(articleId);
+    const userLiked = req.user ? await Like.check(articleId, req.user.id) : false;
 
-      res.json({
-        success: true,
-        data: {
-          likes,
-          count,
-          user_liked: userLiked
-        }
-      });
-    } catch (error) {
-      next(error);
-    }
-  },
+    res.status(200).json(new ApiResponse(200, { likes, count, user_liked: userLiked }));
+  }),
 
-  // Get articles liked by current user
-  async getUserLikes(req, res, next) {
-    try {
-      const likes = await Like.findByAuthor(req.user.id);
-      
-      res.json({
-        success: true,
-        data: likes
-      });
-    } catch (error) {
-      next(error);
-    }
-  },
+  getUserLikes: catchAsync(async (req, res) => {
+    const likes = await Like.findByAuthor(req.user.id);
+    res.status(200).json(new ApiResponse(200, likes));
+  }),
 
-  // Check if user liked article
-  async check(req, res, next) {
-    try {
-      const { articleId } = req.params;
-      
-      const isLiked = await Like.check(articleId, req.user.id);
-      
-      res.json({
-        success: true,
-        data: { liked: isLiked }
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
+  check: catchAsync(async (req, res) => {
+    const isLiked = await Like.check(req.params.articleId, req.user.id);
+    res.status(200).json(new ApiResponse(200, { liked: isLiked }));
+  })
 };
-
 module.exports = likeController;
