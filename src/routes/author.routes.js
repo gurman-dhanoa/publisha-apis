@@ -5,15 +5,19 @@ const validate = require('../middleware/validate');
 const authorSchema = require('../validations/author.validation');
 const authMiddleware = require('../middleware/auth');
 
-// Public routes
-router.post('/register', 
-  validate(authorSchema.register), 
-  authorController.register
+router.post('/request-otp', 
+  validate(authorSchema.requestOtp), 
+  authorController.requestOtp
 );
 
-router.post('/login', 
-  validate(authorSchema.login), 
-  authorController.login
+router.post('/verify-otp', 
+  validate(authorSchema.verifyOtp), 
+  authorController.verifyOtp
+);
+
+router.post('/google-auth', 
+  validate(authorSchema.googleAuth), 
+  authorController.googleAuth
 );
 
 router.get('/', 
@@ -34,8 +38,17 @@ router.get('/:id/stats',
   authorController.getStats
 );
 
-// Protected routes
-router.use(authMiddleware); // All routes below require auth
+router.get('/:id/articles', 
+  validate(authorSchema.getAuthorArticles), 
+  authorController.getAuthorArticles
+);
+
+router.get('/:id/collections', 
+  validate(authorSchema.getAuthorCollections), 
+  authorController.getAuthorCollections
+);
+
+router.use(authMiddleware);
 
 router.get('/profile/me', 
   authorController.getProfile
