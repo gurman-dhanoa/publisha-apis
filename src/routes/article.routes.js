@@ -32,8 +32,6 @@ router.get(
   articleController.getBySlug,
 );
 
-router.get("/author/:id", articleController.getByAuthor);
-
 router.get("/:id", validate(articleSchema.getById), articleController.getById);
 
 // Protected routes
