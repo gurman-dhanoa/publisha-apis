@@ -70,6 +70,7 @@ const articleController = {
   getAll: catchAsync(async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
+    console.log(limit);
     const currentUserId = req.user ? req.user.id : null;
 
     const { articles, total } = await Article.findAll({

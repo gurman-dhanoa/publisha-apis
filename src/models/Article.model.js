@@ -167,6 +167,7 @@ class Article {
     }
 
     const dataParams = [...params, limit, offset];
+    sql += " LIMIT ? OFFSET ?"
     const articles = await DB.query(sql, dataParams);
     
     articles.forEach(article => article.is_liked = !!article.is_liked);
