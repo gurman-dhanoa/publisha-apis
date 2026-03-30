@@ -33,44 +33,55 @@ class Author {
         email: data.email,
         bio: data.bio || null,
         avatar_url: data.avatar_url || null,
-        google_id: data.google_id || null 
+        google_id: data.google_id || null,
       };
 
       const result = await DB.insert("authors", authorData, connection);
       const authorId = result.insertId;
 
       if (data.preferred_categories && data.preferred_categories.length > 0) {
-        const values = data.preferred_categories.map(categoryId => [authorId, categoryId]);
-        const sql = "INSERT INTO author_preferred_categories (author_id, category_id) VALUES ?";
+        const values = data.preferred_categories.map((categoryId) => [
+          authorId,
+          categoryId,
+        ]);
+        const sql =
+          "INSERT INTO author_preferred_categories (author_id, category_id) VALUES ?";
         await connection.query(sql, [values]);
       }
 
       return authorId;
-    }).then(id => this.findById(id));
+    }).then((id) => this.findById(id));
   }
 
   static async update(id, data) {
     return await DB.transaction(async (connection) => {
       const updateData = {};
-      
+
       if (data.name) updateData.name = data.name;
       if (data.bio) updateData.bio = data.bio;
       if (data.avatar_url) updateData.avatar_url = data.avatar_url;
       if (data.google_id) updateData.google_id = data.google_id;
-      
+
       // Explicitly checking for undefined so we can intentionally pass `null` to clear the OTP after a successful login
       if (data.otp !== undefined) updateData.otp = data.otp;
-      if (data.otp_expires_at !== undefined) updateData.otp_expires_at = data.otp_expires_at;
+      if (data.otp_expires_at !== undefined)
+        updateData.otp_expires_at = data.otp_expires_at;
 
       if (Object.keys(updateData).length > 0) {
         await DB.update("authors", updateData, "id = ?", [id], connection);
       }
 
       if (data.preferred_categories) {
-        await connection.query("DELETE FROM author_preferred_categories WHERE author_id = ?", [id]);
+        await connection.query(
+          "DELETE FROM author_preferred_categories WHERE author_id = ?",
+          [id],
+        );
         if (data.preferred_categories.length > 0) {
-          const values = data.preferred_categories.map(catId => [id, catId]);
-          await connection.query("INSERT INTO author_preferred_categories (author_id, category_id) VALUES ?", [values]);
+          const values = data.preferred_categories.map((catId) => [id, catId]);
+          await connection.query(
+            "INSERT INTO author_preferred_categories (author_id, category_id) VALUES ?",
+            [values],
+          );
         }
       }
       return id;
@@ -78,7 +89,8 @@ class Author {
   }
 
   static async delete(id) {
-    const sql = "UPDATE authors SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?";
+    const sql =
+      "UPDATE authors SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?";
     return await DB.query(sql, [id]);
   }
 
@@ -119,7 +131,7 @@ class Author {
     }
 
     sql += " ORDER BY au.created_at DESC LIMIT ? OFFSET ?";
-    
+
     // Create separate array for data fetching to prevent polluting count query
     const dataParams = [...params, limit, offset];
     const authors = await DB.query(sql, dataParams);
@@ -135,6 +147,10 @@ class Author {
 
   static async getArticles(authorId, { status, page = 1, limit = 10 } = {}) {
     const offset = (page - 1) * limit;
+
+    let countSql =
+      "SELECT COUNT(*) as total FROM articles a WHERE a.author_id = ? AND a.deleted_at IS NULL";
+
     let sql = `
       SELECT a.*, 
         (SELECT COUNT(*) FROM likes WHERE article_id = a.id) as likes_count,
@@ -146,25 +162,34 @@ class Author {
 
     if (status) {
       sql += " AND a.status = ?";
+      countSql += " AND a.status = ?";
       params.push(status);
     }
 
     sql += " ORDER BY a.created_at DESC LIMIT ? OFFSET ?";
     params.push(limit, offset);
 
-    return await DB.query(sql, params);
+    const [total] = await DB.query(countSql, params);
+    const articles = await DB.query(sql, params);
+
+    return { articles, total: total.total };
   }
 
   static async getCollections(authorId, { page = 1, limit = 10 } = {}) {
-     const offset = (page - 1) * limit;
-     let sql = `
+    const offset = (page - 1) * limit;
+    const params = [authorId, limit, offset];
+    let countSql =
+      "SELECT COUNT(*) as total FROM collections c WHERE c.author_id = ? LIMIT ? OFFSET ?";
+    let sql = `
       SELECT c.*, 
         (SELECT COUNT(*) FROM collection_articles WHERE collection_id = c.id) as articles_count
       FROM collections c
       WHERE c.author_id = ?
       ORDER BY c.created_at DESC LIMIT ? OFFSET ?
     `;
-    return await DB.query(sql, [authorId, limit, offset]);
+    const [total] = await DB.query(countSql, params);
+    const collections =  await DB.query(sql, params);
+    return { collections, total: total.total };
   }
 
   static async getTrending(limit = 5) {

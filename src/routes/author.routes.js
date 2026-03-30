@@ -33,7 +33,7 @@ router.get(
 
 router.get("/:id", validate(authorSchema.getById), authorController.getById);
 
-router.get("/:id/stats", authorController.getStats);
+router.get("/:id/stats", validate(authorSchema.getById), authorController.getStats);
 
 router.get(
   "/:id/articles",

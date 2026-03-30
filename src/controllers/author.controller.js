@@ -3,11 +3,14 @@ const jwt = require("jsonwebtoken");
 const ApiError = require("../utils/ApiError");
 const ApiResponse = require("../utils/ApiResponse");
 const catchAsync = require("../utils/catchAsync");
-const getPaginationData = require("../utils/pagination");
+const {
+  getPaginationData,
+  parsePaginationParams,
+} = require("../utils/pagination");
 const { PAGINATION } = require("../utils/constants");
-const crypto = require('crypto');
-const { sendOtpEmail } = require('../services/email.service');
-const { verifyFirebaseToken } = require('../services/firebase.service');
+const crypto = require("crypto");
+const { sendOtpEmail } = require("../services/email.service");
+const { verifyFirebaseToken } = require("../services/firebase.service");
 const DB = require("../utils/db");
 
 const authorController = {
@@ -50,17 +53,27 @@ const authorController = {
     }
 
     // Clear the OTP so it can't be reused
-    await DB.update('authors', { otp: null, otp_expires_at: null }, 'id = ?', [author.id]);
+    await DB.update("authors", { otp: null, otp_expires_at: null }, "id = ?", [
+      author.id,
+    ]);
 
-    const token = jwt.sign({ id: author.id, email: author.email }, process.env.JWT_SECRET, { expiresIn: "7d" });
+    const token = jwt.sign(
+      { id: author.id, email: author.email },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" },
+    );
 
-    res.status(200).json(new ApiResponse(200, { author, token }, "Authentication successful"));
+    res
+      .status(200)
+      .json(
+        new ApiResponse(200, { author, token }, "Authentication successful"),
+      );
   }),
 
   // 3. Google Auth Flow
   googleAuth: catchAsync(async (req, res) => {
     const { firebaseToken } = req.body;
-    
+
     // Verify token via Firebase Admin
     const decodedToken = await verifyFirebaseToken(firebaseToken);
     const { email, name, picture, uid } = decodedToken;
@@ -71,18 +84,35 @@ const authorController = {
       // First time logging in with Google
       author = await Author.create({
         email,
-        name: name || email.split('@')[0],
+        name: name || email.split("@")[0],
         avatar_url: picture,
-        google_id: uid
+        google_id: uid,
       });
     } else if (!author.google_id) {
       // Existing user (maybe via OTP previously), now linking Google
-      await DB.update('authors', { google_id: uid, avatar_url: picture }, 'id = ?', [author.id]);
+      await DB.update(
+        "authors",
+        { google_id: uid, avatar_url: picture },
+        "id = ?",
+        [author.id],
+      );
     }
 
-    const token = jwt.sign({ id: author.id, email: author.email }, process.env.JWT_SECRET, { expiresIn: "7d" });
+    const token = jwt.sign(
+      { id: author.id, email: author.email },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" },
+    );
 
-    res.status(200).json(new ApiResponse(200, { author, token }, "Google authentication successful"));
+    res
+      .status(200)
+      .json(
+        new ApiResponse(
+          200,
+          { author, token },
+          "Google authentication successful",
+        ),
+      );
   }),
 
   // Optimized: Removed heavy payload. Only fetches profile.
@@ -138,7 +168,8 @@ const authorController = {
 
     // We can fetch unpaginated for raw calculations, or optimize this later
     // with a dedicated SQL aggregation query for absolute maximum performance.
-    const articles = await Author.getArticles(authorId, { limit: 10000 });
+    const { articles } = await Author.getArticles(authorId, { limit: 10000 });
+    console.log("articles", articles);
 
     const stats = {
       total_articles: articles.length,
@@ -167,25 +198,39 @@ const authorController = {
 
   getAuthorArticles: catchAsync(async (req, res) => {
     const { id } = req.params;
-    const { page, limit, status } = req.query; // Types are now guaranteed by Yup
+    const { page, limit } = parsePaginationParams(req.query); // Types are now guaranteed by Yup
+    const { status } = req.query; // Types are now guaranteed by Yup
 
     // Optional: Check if author exists first, or just return an empty array
-    const articles = await Author.getArticles(id, { status, page, limit });
+    const { articles, total } = await Author.getArticles(id, {
+      status,
+      page,
+      limit,
+    });
 
     res
       .status(200)
-      .json(new ApiResponse(200, articles, "Author articles retrieved"));
+      .json(
+        new ApiResponse(
+          200,
+          { articles, pagination: getPaginationData(total, page, limit) },
+          "Author articles retrieved",
+        ),
+      );
   }),
 
   getAuthorCollections: catchAsync(async (req, res) => {
     const { id } = req.params;
-    const { page, limit } = req.query;
+    const { page, limit } = parsePaginationParams(req.query);
 
-    const collections = await Author.getCollections(id, { page, limit });
+    const { collections, total } = await Author.getCollections(id, {
+      page,
+      limit,
+    });
 
     res
       .status(200)
-      .json(new ApiResponse(200, collections, "Author collections retrieved"));
+      .json(new ApiResponse(200, {collections, pagination: getPaginationData(total, page, limit)}, "Author collections retrieved"));
   }),
 };
 
