@@ -1,220 +1,237 @@
 const Author = require("../models/Author.model");
 const jwt = require("jsonwebtoken");
-const hash = require("../utils/hash");
-const logger = require("../utils/logger");
+const ApiError = require("../utils/ApiError");
+const ApiResponse = require("../utils/ApiResponse");
+const catchAsync = require("../utils/catchAsync");
+const {
+  getPaginationData,
+  parsePaginationParams,
+} = require("../utils/pagination");
+const { PAGINATION } = require("../utils/constants");
+const crypto = require("crypto");
+const { sendOtpEmail } = require("../services/email.service");
+const { verifyFirebaseToken } = require("../services/firebase.service");
+const DB = require("../utils/db");
 
 const authorController = {
-  // Register new author
-  async register(req, res, next) {
-    try {
-      const existingAuthor = await Author.findByEmail(req.body.email);
-      if (existingAuthor) {
-        return res.status(400).json({
-          success: false,
-          error: "Email already registered",
-        });
-      }
+  requestOtp: catchAsync(async (req, res) => {
+    const { email } = req.body;
 
-      const author = await Author.create(req.body);
+    // Generate a 6-digit numeric OTP
+    const otp = crypto.randomInt(100000, 999999).toString();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes from now
 
-      const token = jwt.sign(
-        { id: author.id, email: author.email },
-        process.env.JWT_SECRET,
-        { expiresIn: "7d" },
+    // Check if author exists. If not, create a placeholder profile.
+    let author = await Author.findByEmail(email);
+    if (!author) {
+      author = await Author.create({ email, name: email.split("@")[0] }); // Shell account
+    }
+
+    // Update the author record with the OTP
+    await DB.update("authors", { otp, otp_expires_at: expiresAt }, "id = ?", [
+      author.id,
+    ]);
+
+    await sendOtpEmail(email, otp);
+
+    res
+      .status(200)
+      .json(new ApiResponse(200, null, "OTP sent to email successfully"));
+  }),
+
+  verifyOtp: catchAsync(async (req, res) => {
+    const { email, otp } = req.body;
+    const author = await Author.findByEmail(email);
+
+    if (!author || author.otp !== otp) {
+      throw new ApiError(401, "Invalid or expired OTP");
+    }
+
+    // Check expiration
+    if (new Date() > new Date(author.otp_expires_at)) {
+      throw new ApiError(401, "OTP has expired");
+    }
+
+    // Clear the OTP so it can't be reused
+    await DB.update("authors", { otp: null, otp_expires_at: null }, "id = ?", [
+      author.id,
+    ]);
+
+    const token = jwt.sign(
+      { id: author.id, email: author.email },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" },
+    );
+
+    res
+      .status(200)
+      .json(
+        new ApiResponse(200, { author, token }, "Authentication successful"),
       );
+  }),
 
-      res.status(201).json({
-        success: true,
-        data: { author, token },
+  // 3. Google Auth Flow
+  googleAuth: catchAsync(async (req, res) => {
+    const { firebaseToken } = req.body;
+
+    // Verify token via Firebase Admin
+    const decodedToken = await verifyFirebaseToken(firebaseToken);
+    const { email, name, picture, uid } = decodedToken;
+
+    let author = await Author.findByEmail(email);
+
+    if (!author) {
+      // First time logging in with Google
+      author = await Author.create({
+        email,
+        name: name || email.split("@")[0],
+        avatar_url: picture,
+        google_id: uid,
       });
-    } catch (error) {
-      next(error);
-    }
-  },
-
-  // Login
-  async login(req, res, next) {
-    try {
-      const author = await Author.findByEmail(req.body.email);
-      if (!author) {
-        return res.status(403).json({
-          success: false,
-          error: "Invalid credentials",
-        });
-      }
-
-      const isValid = await hash.compare(
-        req.body.password,
-        author.password_hash,
+    } else if (!author.google_id) {
+      // Existing user (maybe via OTP previously), now linking Google
+      await DB.update(
+        "authors",
+        { google_id: uid, avatar_url: picture },
+        "id = ?",
+        [author.id],
       );
-      if (!isValid) {
-        return res.status(403).json({
-          success: false,
-          error: "Invalid credentials",
-        });
-      }
+    }
 
-      const token = jwt.sign(
-        { id: author.id, email: author.email },
-        process.env.JWT_SECRET,
-        { expiresIn: "7d" },
+    const token = jwt.sign(
+      { id: author.id, email: author.email },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" },
+    );
+
+    res
+      .status(200)
+      .json(
+        new ApiResponse(
+          200,
+          { author, token },
+          "Google authentication successful",
+        ),
       );
+  }),
 
-      delete author.password_hash;
-
-      res.json({
-        success: true,
-        data: { author, token },
-      });
-    } catch (error) {
-      next(error);
+  // Optimized: Removed heavy payload. Only fetches profile.
+  getProfile: catchAsync(async (req, res) => {
+    const author = await Author.findById(req.user.id);
+    if (!author) {
+      throw new ApiError(404, "Author not found");
     }
-  },
 
-  // Get profile
-  async getProfile(req, res, next) {
-    try {
-      const author = await Author.findById(req.user.id);
-      if (!author) {
-        return res.status(404).json({
-          success: false,
-          error: "Author not found",
-        });
-      }
+    res.status(200).json(new ApiResponse(200, author, "Profile retrieved"));
+  }),
 
-      const articles = await Author.getArticles(author.id);
-      const collections = await Author.getCollections(author.id);
-
-      res.json({
-        success: true,
-        data: { ...author, articles, collections },
-      });
-    } catch (error) {
-      next(error);
+  getById: catchAsync(async (req, res) => {
+    const author = await Author.findById(req.params.id);
+    if (!author) {
+      throw new ApiError(404, "Author not found");
     }
-  },
 
-  // Get author by ID
-  async getById(req, res, next) {
-    try {
-      const author = await Author.findById(req.params.id);
-      if (!author) {
-        return res.status(404).json({
-          success: false,
-          error: "Author not found",
-        });
-      }
+    res.status(200).json(new ApiResponse(200, author, "Author retrieved"));
+  }),
 
-      // const articles = await Author.getArticles(author.id, {
-      //   status: "published",
-      // });
-
-      res.json({
-        success: true,
-        data: { ...author },
-      });
-    } catch (error) {
-      next(error);
+  update: catchAsync(async (req, res) => {
+    if (parseInt(req.params.id) !== req.user.id) {
+      throw new ApiError(403, "Unauthorized to update this profile");
     }
-  },
 
-  // Update author
-  async update(req, res, next) {
-    try {
-      // Ensure user can only update their own profile
-      if (parseInt(req.params.id) !== req.user.id) {
-        return res.status(403).json({
-          success: false,
-          error: "Unauthorized",
-        });
-      }
-      const author = await Author.update(req.params.id, req.body);
-      if (!author) {
-        return res.status(404).json({
-          success: false,
-          error: "Author not found",
-        });
-      }
+    const author = await Author.update(req.params.id, req.body);
+    res.status(200).json(new ApiResponse(200, author, "Profile updated"));
+  }),
 
-      res.json({
-        success: true,
-        data: author,
-      });
-    } catch (error) {
-      next(error);
-    }
-  },
+  getAll: catchAsync(async (req, res) => {
+    const page = parseInt(req.query.page) || PAGINATION.DEFAULT_PAGE;
+    const limit = parseInt(req.query.limit) || PAGINATION.DEFAULT_LIMIT;
+    const { search, categoryId } = req.query;
 
-  // Get all authors
-  async getAll(req, res, next) {
-    try {
-      const { page, limit } = req.query;
-      const result = await Author.findAll({ page, limit });
+    const { authors, total } = await Author.findAll({
+      search,
+      categoryId,
+      page,
+      limit,
+    });
 
-      res.json({
-        success: true,
-        ...result,
-      });
-    } catch (error) {
-      next(error);
-    }
-  },
+    res.status(200).json(
+      new ApiResponse(200, {
+        authors,
+        pagination: getPaginationData(total, page, limit),
+      }),
+    );
+  }),
 
-  // Get author stats
-  async getStats(req, res, next) {
-    try {
-      const authorId = parseInt(req.params.id);
+  getStats: catchAsync(async (req, res) => {
+    const authorId = parseInt(req.params.id);
 
-      // Verify access
-      // if (parseInt(req.params.id) && req.params.id != req.user.id) {
-      //   return res.status(403).json({
-      //     success: false,
-      //     error: "Unauthorized",
-      //   });
-      // }
+    // We can fetch unpaginated for raw calculations, or optimize this later
+    // with a dedicated SQL aggregation query for absolute maximum performance.
+    const { articles } = await Author.getArticles(authorId, { limit: 10000 });
+    console.log("articles", articles);
 
-      const articles = await Author.getArticles(authorId);
+    const stats = {
+      total_articles: articles.length,
+      published_articles: articles.filter((a) => a.status === "published")
+        .length,
+      total_likes: articles.reduce((sum, a) => sum + (a.likes_count || 0), 0),
+      avg_rating:
+        articles.reduce((sum, a) => sum + (parseFloat(a.avg_rating) || 0), 0) /
+        (articles.length || 1),
+    };
 
-      const stats = {
-        total_articles: articles.length,
-        published_articles: articles.filter((a) => a.status === "published")
-          .length,
-        total_views: articles.reduce((sum, a) => sum + (a.views_count || 0), 0),
-        total_likes: articles.reduce((sum, a) => sum + (a.likes_count || 0), 0),
-        avg_rating:
-          articles.reduce(
-            (sum, a) => sum + (parseFloat(a.avg_rating) || 0),
-            0,
-          ) / articles.length || 0,
-      };
+    res.status(200).json(new ApiResponse(200, stats));
+  }),
 
-      res.json({
-        success: true,
-        data: stats,
-      });
-    } catch (error) {
-      next(error);
-    }
-  },
+  getTrending: catchAsync(async (req, res) => {
+    let limit = parseInt(req.query.limit) || 5;
+    if (limit > 15) limit = 15;
 
-  async getTrending(req, res, next) {
-    try {
-      // Default to 5 trending authors, maximum 15
-      let limit = parseInt(req.query.limit) || 5;
-      if (limit > 15) limit = 15;
+    const trendingAuthors = await Author.getTrending(limit);
+    res
+      .status(200)
+      .json(
+        new ApiResponse(200, trendingAuthors, "Trending authors retrieved"),
+      );
+  }),
 
-      const trendingAuthors = await Author.getTrending(limit);
+  getAuthorArticles: catchAsync(async (req, res) => {
+    const { id } = req.params;
+    const { page, limit } = parsePaginationParams(req.query); // Types are now guaranteed by Yup
+    const { status } = req.query; // Types are now guaranteed by Yup
 
-      res.json({
-        success: true,
-        count: trendingAuthors.length,
-        data: trendingAuthors,
-      });
-    } catch (error) {
-      logger.error(`Error in getTrendingAuthors: ${error.message}`);
-      next(error);
-    }
-  },
+    // Optional: Check if author exists first, or just return an empty array
+    const { articles, total } = await Author.getArticles(id, {
+      status,
+      page,
+      limit,
+    });
+
+    res
+      .status(200)
+      .json(
+        new ApiResponse(
+          200,
+          { articles, pagination: getPaginationData(total, page, limit) },
+          "Author articles retrieved",
+        ),
+      );
+  }),
+
+  getAuthorCollections: catchAsync(async (req, res) => {
+    const { id } = req.params;
+    const { page, limit } = parsePaginationParams(req.query);
+
+    const { collections, total } = await Author.getCollections(id, {
+      page,
+      limit,
+    });
+
+    res
+      .status(200)
+      .json(new ApiResponse(200, {collections, pagination: getPaginationData(total, page, limit)}, "Author collections retrieved"));
+  }),
 };
 
 module.exports = authorController;

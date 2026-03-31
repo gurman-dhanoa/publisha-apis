@@ -11,14 +11,31 @@ class Category {
     return await DB.getOne(sql, [slug]);
   }
 
-  static async findAll() {
+  // NEW: Handles the LinkedIn-style dynamic creation
+  static async findOrCreate(name) {
+    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    
+    const existing = await this.findBySlug(slug);
+    if (existing) return existing;
+
+    const result = await DB.insert('categories', { name, slug });
+    return { id: result.insertId, name, slug };
+  }
+
+  // OPTIMIZED: Added Pagination
+  static async findAll(page = 1, limit = 50) {
+    const offset = (page - 1) * limit;
     const sql = `
       SELECT c.*, 
         (SELECT COUNT(*) FROM article_categories ac WHERE ac.category_id = c.id) as articles_count
       FROM categories c
       ORDER BY c.name ASC
+      LIMIT ? OFFSET ?
     `;
-    return await DB.query(sql);
+    const categories = await DB.query(sql, [limit, offset]);
+    
+    const [total] = await DB.query("SELECT COUNT(*) as total FROM categories");
+    return { categories, total: total.total };
   }
 
   static async getPopular(limit = 10) {
@@ -30,7 +47,7 @@ class Category {
       ORDER BY articles_count DESC
       LIMIT ?
     `;
-    return await DB.query(sql, [limit]);
+    return await DB.query(sql, [parseInt(limit)]);
   }
 }
 

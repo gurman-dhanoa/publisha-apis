@@ -1,17 +1,8 @@
-const yup = require('yup');
+const yup = require("yup");
 
 const likeSchema = {
-  toggle: yup.object({
-    params: yup.object({
-      articleId: yup.number().required()
-    })
-  }),
-
-  getByArticle: yup.object({
-    params: yup.object({
-      articleId: yup.number().required()
-    })
-  })
+  getByArticle: yup.object({ params: yup.object({ articleId: yup.number().integer().required() }) }),
+  toggle: yup.object({ params: yup.object({ articleId: yup.number().integer().required() }) })
 };
 
 module.exports = likeSchema;

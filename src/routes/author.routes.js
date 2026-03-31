@@ -1,49 +1,56 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const authorController = require('../controllers/author.controller');
-const validate = require('../middleware/validate');
-const authorSchema = require('../validations/author.validation');
-const authMiddleware = require('../middleware/auth');
+const authorController = require("../controllers/author.controller");
+const validate = require("../middleware/validate");
+const authorSchema = require("../validations/author.validation");
+const { authMiddleware } = require("../middleware/auth");
 
-// Public routes
-router.post('/register', 
-  validate(authorSchema.register), 
-  authorController.register
+router.post(
+  "/request-otp",
+  validate(authorSchema.requestOtp),
+  authorController.requestOtp,
 );
 
-router.post('/login', 
-  validate(authorSchema.login), 
-  authorController.login
+router.post(
+  "/verify-otp",
+  validate(authorSchema.verifyOtp),
+  authorController.verifyOtp,
 );
 
-router.get('/', 
-  authorController.getAll
+router.post(
+  "/google-auth",
+  validate(authorSchema.googleAuth),
+  authorController.googleAuth,
 );
 
-router.get('/trending', 
-  validate(authorSchema.getTrending), 
-  authorController.getTrending
+router.get("/", authorController.getAll);
+
+router.get(
+  "/trending",
+  validate(authorSchema.getTrending),
+  authorController.getTrending,
 );
 
-router.get('/:id', 
-  validate(authorSchema.getById), 
-  authorController.getById
+router.get("/:id", validate(authorSchema.getById), authorController.getById);
+
+router.get("/:id/stats", validate(authorSchema.getById), authorController.getStats);
+
+router.get(
+  "/:id/articles",
+  validate(authorSchema.getAuthorArticles),
+  authorController.getAuthorArticles,
 );
 
-router.get('/:id/stats', 
-  authorController.getStats
+router.get(
+  "/:id/collections",
+  validate(authorSchema.getAuthorCollections),
+  authorController.getAuthorCollections,
 );
 
-// Protected routes
-router.use(authMiddleware); // All routes below require auth
+router.use(authMiddleware);
 
-router.get('/profile/me', 
-  authorController.getProfile
-);
+router.get("/profile/me", authorController.getProfile);
 
-router.put('/:id', 
-  validate(authorSchema.update), 
-  authorController.update
-);
+router.put("/:id", validate(authorSchema.update), authorController.update);
 
 module.exports = router;

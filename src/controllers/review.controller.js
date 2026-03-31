@@ -1,183 +1,103 @@
-const Review = require('../models/Review.model');
-const Article = require('../models/Article.model');
-const logger = require('../utils/logger');
+const Review = require("../models/Review.model");
+const Article = require("../models/Article.model");
+const catchAsync = require("../utils/catchAsync");
+const ApiResponse = require("../utils/ApiResponse");
+const ApiError = require("../utils/ApiError");
+const { getPaginationData } = require("../utils/pagination");
 
 const reviewController = {
-  // Create review
-  async create(req, res, next) {
+  create: catchAsync(async (req, res) => {
+    const { article_id } = req.body;
+    const article = await Article.findById(article_id);
+
+    if (!article) throw new ApiError(404, "Article not found");
+    if (article.status !== "published")
+      throw new ApiError(400, "Cannot review unpublished article");
+    if (article.author_id === req.user.id)
+      throw new ApiError(400, "Cannot review your own article");
+
     try {
-      const { article_id } = req.body;
-      
-      // Check if article exists and is published
-      const article = await Article.findById(article_id);
-      if (!article) {
-        return res.status(404).json({
-          success: false,
-          error: 'Article not found'
-        });
-      }
-
-      if (article.status !== 'published') {
-        return res.status(400).json({
-          success: false,
-          error: 'Cannot review unpublished article'
-        });
-      }
-
-      // Prevent self-review
-      if (article.author_id === req.user.id) {
-        return res.status(400).json({
-          success: false,
-          error: 'Cannot review your own article'
-        });
-      }
-
-      const reviewData = {
+      const review = await Review.create({
         ...req.body,
-        author_id: req.user.id
-      };
-
-      const review = await Review.create(reviewData);
-      
-      res.status(201).json({
-        success: true,
-        data: review
+        author_id: req.user.id,
       });
+      res
+        .status(201)
+        .json(new ApiResponse(201, review, "Review added successfully"));
     } catch (error) {
-      if (error.message === 'You have already reviewed this article') {
-        return res.status(400).json({
-          success: false,
-          error: error.message
-        });
+      if (error.message === "You have already reviewed this article") {
+        throw new ApiError(400, error.message);
       }
-      next(error);
+      throw error;
     }
-  },
+  }),
 
-  // Update review
-  async update(req, res, next) {
-    try {
-      const review = await Review.findById(req.params.id);
-      if (!review) {
-        return res.status(404).json({
-          success: false,
-          error: 'Review not found'
-        });
-      }
+  update: catchAsync(async (req, res) => {
+    const review = await Review.findById(req.params.id);
+    if (!review) throw new ApiError(404, "Review not found");
+    if (review.author_id !== req.user.id)
+      throw new ApiError(403, "Unauthorized");
 
-      // Ensure user owns the review
-      if (review.author_id !== req.user.id) {
-        return res.status(403).json({
-          success: false,
-          error: 'Unauthorized'
-        });
-      }
+    const updated = await Review.update(req.params.id, req.body);
+    res.status(200).json(new ApiResponse(200, updated, "Review updated"));
+  }),
 
-      const updated = await Review.update(req.params.id, req.body);
-      
-      res.json({
-        success: true,
-        data: updated
-      });
-    } catch (error) {
-      next(error);
-    }
-  },
+  delete: catchAsync(async (req, res) => {
+    const review = await Review.findById(req.params.id);
+    if (!review) throw new ApiError(404, "Review not found");
+    if (review.author_id !== req.user.id)
+      throw new ApiError(403, "Unauthorized");
 
-  // Delete review
-  async delete(req, res, next) {
-    try {
-      const review = await Review.findById(req.params.id);
-      if (!review) {
-        return res.status(404).json({
-          success: false,
-          error: 'Review not found'
-        });
-      }
+    await Review.delete(req.params.id);
+    res
+      .status(200)
+      .json(new ApiResponse(200, null, "Review deleted successfully"));
+  }),
 
-      // Ensure user owns the review
-      if (review.author_id !== req.user.id) {
-        return res.status(403).json({
-          success: false,
-          error: 'Unauthorized'
-        });
-      }
+  getByArticle: catchAsync(async (req, res) => {
+    const { articleId } = req.params;
+    const { page, limit } = req.query;
 
-      await Review.delete(req.params.id);
-      
-      res.json({
-        success: true,
-        message: 'Review deleted successfully'
-      });
-    } catch (error) {
-      next(error);
-    }
-  },
+    const article = await Article.findById(articleId);
+    if (!article) throw new ApiError(404, "Article not found");
 
-  // Get reviews by article
-  async getByArticle(req, res, next) {
-    try {
-      const { articleId } = req.params;
-      
-      const article = await Article.findById(articleId);
-      if (!article) {
-        return res.status(404).json({
-          success: false,
-          error: 'Article not found'
-        });
-      }
+    const { reviews, total, summary } = await Review.findByArticle(articleId, {
+      page,
+      limit,
+    });
+    const userReview = req.user
+      ? await Review.findByArticleAndAuthor(articleId, req.user.id)
+      : null;
 
-      const result = await Review.findByArticle(articleId, req.query);
-      
-      // Check if current user reviewed this article
-      let userReview = null;
-      if (req.user) {
-        userReview = await Review.findByArticleAndAuthor(articleId, req.user.id);
-      }
+    res.status(200).json(
+      new ApiResponse(200, {
+        reviews,
+        pagination: getPaginationData(total, page, limit),
+        summary,
+        user_review: userReview,
+      }),
+    );
+  }),
 
-      res.json({
-        success: true,
-        ...result,
-        user_review: userReview
-      });
-    } catch (error) {
-      next(error);
-    }
-  },
+  getUserReviews: catchAsync(async (req, res) => {
+    const { page, limit } = req.query;
+    const { reviews, total } = await Review.findByAuthor(req.user.id, {
+      page,
+      limit,
+    });
 
-  // Get reviews by current user
-  async getUserReviews(req, res, next) {
-    try {
-      const result = await Review.findByAuthor(req.user.id, req.query);
-      
-      res.json({
-        success: true,
-        ...result
-      });
-    } catch (error) {
-      next(error);
-    }
-  },
+    res.status(200).json(
+      new ApiResponse(200, {
+        reviews,
+        pagination: getPaginationData(total, page, limit),
+      }),
+    );
+  }),
 
-  // Get review by ID
-  async getById(req, res, next) {
-    try {
-      const review = await Review.findById(req.params.id);
-      if (!review) {
-        return res.status(404).json({
-          success: false,
-          error: 'Review not found'
-        });
-      }
-
-      res.json({
-        success: true,
-        data: review
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
+  getById: catchAsync(async (req, res) => {
+    const review = await Review.findById(req.params.id);
+    if (!review) throw new ApiError(404, "Review not found");
+    res.status(200).json(new ApiResponse(200, review));
+  }),
 };
-
 module.exports = reviewController;
