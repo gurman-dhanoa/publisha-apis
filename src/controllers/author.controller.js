@@ -166,22 +166,12 @@ const authorController = {
   getStats: catchAsync(async (req, res) => {
     const authorId = parseInt(req.params.id);
 
-    // We can fetch unpaginated for raw calculations, or optimize this later
-    // with a dedicated SQL aggregation query for absolute maximum performance.
-    const { articles } = await Author.getArticles(authorId, { limit: 10000 });
-    console.log("articles", articles);
+    // Completely offload calculations to the database engine
+    const stats = await Author.getStats(authorId);
 
-    const stats = {
-      total_articles: articles.length,
-      published_articles: articles.filter((a) => a.status === "published")
-        .length,
-      total_likes: articles.reduce((sum, a) => sum + (a.likes_count || 0), 0),
-      avg_rating:
-        articles.reduce((sum, a) => sum + (parseFloat(a.avg_rating) || 0), 0) /
-        (articles.length || 1),
-    };
-
-    res.status(200).json(new ApiResponse(200, stats));
+    res
+      .status(200)
+      .json(new ApiResponse(200, stats, "Author stats retrieved successfully"));
   }),
 
   getTrending: catchAsync(async (req, res) => {
@@ -230,7 +220,13 @@ const authorController = {
 
     res
       .status(200)
-      .json(new ApiResponse(200, {collections, pagination: getPaginationData(total, page, limit)}, "Author collections retrieved"));
+      .json(
+        new ApiResponse(
+          200,
+          { collections, pagination: getPaginationData(total, page, limit) },
+          "Author collections retrieved",
+        ),
+      );
   }),
 };
 

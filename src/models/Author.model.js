@@ -209,6 +209,36 @@ class Author {
     `;
     return await DB.query(sql, [ARTICLE_STATUS.PUBLISHED, parseInt(limit)]);
   }
+
+  static async getStats(authorId) {
+    const sql = `
+      SELECT 
+        (SELECT COUNT(id) FROM articles WHERE author_id = ? AND deleted_at IS NULL) as total_articles,
+        (SELECT COUNT(id) FROM articles WHERE author_id = ? AND status = 'published' AND deleted_at IS NULL) as published_articles,
+        (SELECT COALESCE(SUM(views_count), 0) FROM articles WHERE author_id = ? AND deleted_at IS NULL) as total_views,
+        (SELECT COUNT(l.article_id) 
+         FROM likes l 
+         INNER JOIN articles a ON l.article_id = a.id 
+         WHERE a.author_id = ? AND a.deleted_at IS NULL) as total_likes,
+        (SELECT AVG(r.rating) 
+         FROM reviews r 
+         INNER JOIN articles a ON r.article_id = a.id 
+         WHERE a.author_id = ? AND a.deleted_at IS NULL) as avg_rating
+    `;
+    
+    // We pass authorId 5 times, once for each subquery
+    const result = await DB.getOne(sql, [authorId, authorId, authorId, authorId, authorId]);
+    
+    // Format the results to ensure clean types for the frontend
+    return {
+      total_articles: parseInt(result.total_articles || 0),
+      published_articles: parseInt(result.published_articles || 0),
+      total_views: parseInt(result.total_views || 0),
+      total_likes: parseInt(result.total_likes || 0),
+      // Format average to 1 decimal place (e.g., 4.5). Return 0 if there are no reviews yet.
+      avg_rating: result.avg_rating ? parseFloat(result.avg_rating).toFixed(1) : 0
+    };
+  }
 }
 
 module.exports = Author;
