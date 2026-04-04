@@ -195,7 +195,7 @@ class Author {
          FROM articles a 
          INNER JOIN collection_articles ca ON a.id = ca.article_id 
          WHERE ca.collection_id = c.id AND a.deleted_at IS NULL AND a.status = 'published' 
-         ORDER BY ca.added_at ASC 
+         ORDER BY ca.sort_order ASC, ca.added_at DESC
          LIMIT 1
         ) as cover_image
 
