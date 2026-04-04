@@ -177,18 +177,40 @@ class Author {
 
   static async getCollections(authorId, { page = 1, limit = 10 } = {}) {
     const offset = (page - 1) * limit;
-    const params = [authorId, limit, offset];
-    let countSql =
-      "SELECT COUNT(*) as total FROM collections c WHERE c.author_id = ? LIMIT ? OFFSET ?";
-    let sql = `
+    
+    const countSql =
+      "SELECT COUNT(*) as total FROM collections WHERE author_id = ?";
+    const [total] = await DB.query(countSql, [authorId]);
+
+    const sql = `
       SELECT c.*, 
-        (SELECT COUNT(*) FROM collection_articles WHERE collection_id = c.id) as articles_count
+        (SELECT COUNT(*) 
+         FROM collection_articles ca
+         INNER JOIN articles a ON ca.article_id = a.id
+         WHERE ca.collection_id = c.id AND a.deleted_at IS NULL AND a.status = 'published'
+        ) as articles_count,
+        
+        -- NEW: Fetch the image of the first article added to this collection
+        (SELECT a.image_url 
+         FROM articles a 
+         INNER JOIN collection_articles ca ON a.id = ca.article_id 
+         WHERE ca.collection_id = c.id AND a.deleted_at IS NULL AND a.status = 'published' 
+         ORDER BY ca.added_at ASC 
+         LIMIT 1
+        ) as cover_image
+
       FROM collections c
       WHERE c.author_id = ?
-      ORDER BY c.created_at DESC LIMIT ? OFFSET ?
+      ORDER BY c.created_at DESC 
+      LIMIT ? OFFSET ?
     `;
-    const [total] = await DB.query(countSql, params);
-    const collections =  await DB.query(sql, params);
+
+    const collections = await DB.query(sql, [
+      authorId,
+      parseInt(limit),
+      parseInt(offset),
+    ]);
+
     return { collections, total: total.total };
   }
 
@@ -225,10 +247,16 @@ class Author {
          INNER JOIN articles a ON r.article_id = a.id 
          WHERE a.author_id = ? AND a.deleted_at IS NULL) as avg_rating
     `;
-    
+
     // We pass authorId 5 times, once for each subquery
-    const result = await DB.getOne(sql, [authorId, authorId, authorId, authorId, authorId]);
-    
+    const result = await DB.getOne(sql, [
+      authorId,
+      authorId,
+      authorId,
+      authorId,
+      authorId,
+    ]);
+
     // Format the results to ensure clean types for the frontend
     return {
       total_articles: parseInt(result.total_articles || 0),
@@ -236,7 +264,9 @@ class Author {
       total_views: parseInt(result.total_views || 0),
       total_likes: parseInt(result.total_likes || 0),
       // Format average to 1 decimal place (e.g., 4.5). Return 0 if there are no reviews yet.
-      avg_rating: result.avg_rating ? parseFloat(result.avg_rating).toFixed(1) : 0
+      avg_rating: result.avg_rating
+        ? parseFloat(result.avg_rating).toFixed(1)
+        : 0,
     };
   }
 }
