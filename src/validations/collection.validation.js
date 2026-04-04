@@ -13,6 +13,7 @@ const collectionSchema = {
     body: yup.object({
       name: yup.string().min(3).max(100),
       description: yup.string().max(500).nullable(),
+      article_ids: yup.array().of(yup.number().integer())
     })
   }),
   addArticles: yup.object({
