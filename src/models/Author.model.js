@@ -102,13 +102,28 @@ class Author {
     let sql = `
       SELECT 
         au.id, au.name, au.email, au.bio, au.avatar_url, au.created_at,
+        
+        -- 1. Get stats
+        (SELECT COUNT(id) FROM articles WHERE author_id = au.id AND status = 'published' AND deleted_at IS NULL) as total_articles,
+        (SELECT COALESCE(SUM(views_count), 0) FROM articles WHERE author_id = au.id AND status = 'published' AND deleted_at IS NULL) as total_views,
+        (SELECT COUNT(l.article_id) FROM likes l INNER JOIN articles ar ON l.article_id = ar.id WHERE ar.author_id = au.id AND ar.status = 'published' AND ar.deleted_at IS NULL) as total_likes,
+
+        -- 2. Smart Category Fallback
         COALESCE(
           (SELECT JSON_ARRAYAGG(JSON_OBJECT('id', c.id, 'name', c.name, 'slug', c.slug))
-           FROM author_preferred_categories apc
-           JOIN categories c ON apc.category_id = c.id
+           FROM categories c
+           WHERE EXISTS (
+               SELECT 1 FROM article_categories ac
+               JOIN articles a ON ac.article_id = a.id
+               WHERE ac.category_id = c.id AND a.author_id = au.id AND a.status = 'published' AND a.deleted_at IS NULL
+           )),
+          (SELECT JSON_ARRAYAGG(JSON_OBJECT('id', c.id, 'name', c.name, 'slug', c.slug))
+           FROM categories c
+           JOIN author_preferred_categories apc ON c.id = apc.category_id
            WHERE apc.author_id = au.id),
           JSON_ARRAY()
         ) as categories
+        
       FROM authors au
     `;
 
@@ -117,24 +132,39 @@ class Author {
       params.push(`%${search}%`, `%${search}%`);
     }
 
-    // Filter by the new junction table
     if (categoryId) {
-      whereClauses.push(`EXISTS (
-        SELECT 1 FROM author_preferred_categories apc 
-        WHERE apc.author_id = au.id AND apc.category_id = ?
+      whereClauses.push(`(
+        EXISTS (
+          SELECT 1 FROM article_categories ac
+          JOIN articles a ON ac.article_id = a.id
+          WHERE ac.category_id = ? AND a.author_id = au.id AND a.status = 'published' AND a.deleted_at IS NULL
+        )
+        OR 
+        EXISTS (
+          SELECT 1 FROM author_preferred_categories apc 
+          WHERE apc.author_id = au.id AND apc.category_id = ?
+        )
       )`);
-      params.push(categoryId);
+      params.push(categoryId, categoryId); 
     }
 
     if (whereClauses.length > 0) {
       sql += " WHERE " + whereClauses.join(" AND ");
     }
 
-    sql += " ORDER BY au.created_at DESC LIMIT ? OFFSET ?";
+    // ✨ THIS IS THE MAGIC LINE ✨
+    sql += " ORDER BY total_views DESC, au.created_at DESC LIMIT ? OFFSET ?";
 
-    // Create separate array for data fetching to prevent polluting count query
-    const dataParams = [...params, limit, offset];
-    const authors = await DB.query(sql, dataParams);
+    const dataParams = [...params, parseInt(limit), parseInt(offset)];
+    let authors = await DB.query(sql, dataParams);
+
+    authors = authors.map(author => ({
+      ...author,
+      total_articles: parseInt(author.total_articles || 0),
+      total_views: parseInt(author.total_views || 0),
+      total_likes: parseInt(author.total_likes || 0),
+      categories: typeof author.categories === 'string' ? JSON.parse(author.categories) : author.categories
+    }));
 
     let countSql = "SELECT COUNT(*) as total FROM authors au";
     if (whereClauses.length > 0) {
@@ -177,7 +207,7 @@ class Author {
 
   static async getCollections(authorId, { page = 1, limit = 10 } = {}) {
     const offset = (page - 1) * limit;
-    
+
     const countSql =
       "SELECT COUNT(*) as total FROM collections WHERE author_id = ?";
     const [total] = await DB.query(countSql, [authorId]);
@@ -215,21 +245,43 @@ class Author {
   }
 
   static async getTrending(limit = 5) {
-    // Trending adjusted to use likes instead of views (since views table was dropped)
     const sql = `
       SELECT 
-        au.id, au.name, au.avatar_url, au.bio,
-        COUNT(DISTINCT a.id) as total_articles,
-        COUNT(l.id) as total_likes
+        au.id, 
+        au.name, 
+        au.avatar_url, 
+        au.bio,
+        COUNT(a.id) as total_articles,
+        COALESCE(SUM(a.views_count), 0) as total_views,
+        
+        -- Use a subquery for likes to avoid multiplying views_count by the number of likes
+        (SELECT COUNT(l.article_id) 
+         FROM likes l 
+         INNER JOIN articles ar ON l.article_id = ar.id 
+         WHERE ar.author_id = au.id AND ar.status = ? AND ar.deleted_at IS NULL
+        ) as total_likes
+        
       FROM authors au
       LEFT JOIN articles a ON au.id = a.author_id AND a.status = ? AND a.deleted_at IS NULL
-      LEFT JOIN likes l ON a.id = l.article_id
       WHERE au.deleted_at IS NULL
       GROUP BY au.id
-      ORDER BY total_likes DESC, total_articles DESC
+      ORDER BY total_views DESC, total_likes DESC, total_articles DESC
       LIMIT ?
     `;
-    return await DB.query(sql, [ARTICLE_STATUS.PUBLISHED, parseInt(limit)]);
+
+    const trendingAuthors = await DB.query(sql, [
+      "published", // For the likes subquery status
+      "published", // For the main articles join status (replace with ARTICLE_STATUS.PUBLISHED if you use constants)
+      parseInt(limit),
+    ]);
+
+    // Format the numbers so the frontend receives clean integers instead of stringified sums
+    return trendingAuthors.map((author) => ({
+      ...author,
+      total_articles: parseInt(author.total_articles || 0),
+      total_views: parseInt(author.total_views || 0),
+      total_likes: parseInt(author.total_likes || 0),
+    }));
   }
 
   static async getStats(authorId) {
