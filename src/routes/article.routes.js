@@ -47,7 +47,7 @@ router.post(
 router.put(
   "/:id",
   upload.single("featuredImage"),
-  // validate(articleSchema.update),
+  validate(articleSchema.update),
   articleController.update,
 );
 

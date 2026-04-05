@@ -39,6 +39,7 @@ const articleSchema = {
       title: yup.string().min(5).max(255),
       summary: yup.string().min(50).max(500),
       content: yup.string().min(100),
+      slug: yup.string().required("Slug is required").min(5).max(255),
       image_url: yup.string().url("Must be a valid URL"),
       categories: yup.array().transform(parseJsonArray).of(yup.number().integer()),
       status: yup.string().oneOf([ARTICLE_STATUS.DRAFT, ARTICLE_STATUS.PUBLISHED]),
