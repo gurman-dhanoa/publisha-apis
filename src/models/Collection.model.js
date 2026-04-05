@@ -94,7 +94,16 @@ class Collection {
     return await DB.query("DELETE FROM collections WHERE id = ?", [id]);
   }
 
-  static async getByAuthor(authorId) {
+  static async getByAuthor(authorId, { page = 1, limit = 10 } = {}) {
+    const offset = (page - 1) * limit;
+
+    // 1. Get the total count for the pagination math
+    const countSql =
+      "SELECT COUNT(*) as total FROM collections WHERE author_id = ?";
+    const [totalResult] = await DB.query(countSql, [authorId]);
+    const total = totalResult.total;
+
+    // 2. Fetch the paginated data
     const sql = `
       SELECT c.*, au.name as author_name,
         (SELECT COUNT(*) FROM collection_articles ca INNER JOIN articles a ON ca.article_id = a.id WHERE ca.collection_id = c.id AND a.deleted_at IS NULL) as articles_count,
@@ -103,9 +112,20 @@ class Collection {
       LEFT JOIN authors au ON c.author_id = au.id
       WHERE c.author_id = ?
       ORDER BY c.created_at DESC
+      LIMIT ? OFFSET ?
     `;
-    const collections = await DB.query(sql, [authorId]);
-    return await this._attachPreviewArticles(collections);
+
+    const collections = await DB.query(sql, [
+      authorId,
+      parseInt(limit),
+      parseInt(offset),
+    ]);
+
+    // 3. Attach the preview images safely
+    const collectionsWithPreviews =
+      await this._attachPreviewArticles(collections);
+
+    return { collections: collectionsWithPreviews, total };
   }
 
   static async getPopular(limit = 6) {

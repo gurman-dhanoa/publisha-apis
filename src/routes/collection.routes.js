@@ -6,7 +6,7 @@ const collectionSchema = require("../validations/collection.validation");
 const { authMiddleware } = require("../middleware/auth");
 
 // Public routes
-router.get("/author/:authorId", collectionController.getByAuthor);
+router.get("/author/:authorId", validate(collectionSchema.authorCollections), collectionController.getByAuthor);
 
 router.get("/popular", collectionController.getPopular);
 

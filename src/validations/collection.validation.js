@@ -1,4 +1,5 @@
 const yup = require("yup");
+const { PAGINATION } = require("../utils/constants");
 
 const collectionSchema = {
   create: yup.object({
@@ -27,7 +28,16 @@ const collectionSchema = {
       collectionId: yup.number().integer().required(),
       articleId: yup.number().integer().required()
     })
-  })
+  }),
+  authorCollections: yup.object({
+    params: yup.object({
+      authorId: yup.number().integer().required()
+    }),
+    query: yup.object({
+      page: yup.number().integer().min(1).default(PAGINATION.DEFAULT_PAGE),
+      limit: yup.number().integer().min(1).max(PAGINATION.MAX_LIMIT).default(PAGINATION.DEFAULT_LIMIT),
+    }),
+  }),
 };
 
 module.exports = collectionSchema;
