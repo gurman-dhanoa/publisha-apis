@@ -40,7 +40,7 @@ router.use(authMiddleware);
 router.post(
   "/",
   upload.single("featuredImage"),
-  // validate(articleSchema.create),
+  validate(articleSchema.create),
   articleController.create,
 );
 

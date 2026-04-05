@@ -20,16 +20,17 @@ const articleSchema = {
   create: yup.object({
     body: yup.object({
       title: yup.string().required("Title is required").min(5).max(255),
+      slug: yup.string().required("Slug is required").min(5).max(255),
       summary: yup.string().required("Summary is required").min(50).max(500),
       content: yup.string().required("Content is required").min(100),
-      image_url: yup.string().url("Must be a valid URL"),
+      // image_url: yup.string().url("Must be a valid URL"),
       // author_id REMOVED: Sourced securely from req.user.id in the controller
       categories: yup.array()
         .transform(parseJsonArray)
         .of(yup.number().integer())
         .min(1, "At least one category is required")
         .required("Categories are required"),
-      status: yup.string().oneOf([ARTICLE_STATUS.DRAFT, ARTICLE_STATUS.PUBLISHED]).default(ARTICLE_STATUS.DRAFT),
+      status: yup.string().oneOf([ARTICLE_STATUS.DRAFT, ARTICLE_STATUS.PUBLISHED]).default(ARTICLE_STATUS.PUBLISHED),
     }),
   }),
 

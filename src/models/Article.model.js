@@ -70,7 +70,7 @@ class Article {
 
       const result = await DB.insert("articles", articleData, connection);
       const articleId = result.insertId;
-
+      console.log(data);
       if (data.categories && data.categories.length > 0) {
         const values = data.categories.map((catId) => [articleId, catId]);
         await connection.query("INSERT INTO article_categories (article_id, category_id) VALUES ?", [values]);
