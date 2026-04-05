@@ -209,6 +209,29 @@ const authorController = {
       );
   }),
 
+  getPublishedArticles: catchAsync(async (req, res) => {
+    const { id } = req.params;
+    const { page, limit } = parsePaginationParams(req.query); // Types are now guaranteed by Yup
+    const { status } = req.query; // Types are now guaranteed by Yup
+
+    // Optional: Check if author exists first, or just return an empty array
+    const { articles, total } = await Author.getArticles(id, {
+      status: "published",
+      page,
+      limit,
+    });
+
+    res
+      .status(200)
+      .json(
+        new ApiResponse(
+          200,
+          { articles, pagination: getPaginationData(total, page, limit) },
+          "Author articles retrieved",
+        ),
+      );
+  }),
+
   getAuthorCollections: catchAsync(async (req, res) => {
     const { id } = req.params;
     const { page, limit } = parsePaginationParams(req.query);

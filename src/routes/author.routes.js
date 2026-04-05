@@ -42,6 +42,12 @@ router.get(
 );
 
 router.get(
+  "/:id/articles/active",
+  validate(authorSchema.getAuthorArticles),
+  authorController.getPublishedArticles,
+);
+
+router.get(
   "/:id/collections",
   validate(authorSchema.getAuthorCollections),
   authorController.getAuthorCollections,
