@@ -11,6 +11,11 @@ router.post(
   authorController.requestOtp,
 );
 
+router.get(
+  "/sitemap",
+  authorController.getAllAuthorsForSitemap,
+);
+
 router.post(
   "/verify-otp",
   validate(authorSchema.verifyOtp),

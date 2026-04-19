@@ -321,6 +321,11 @@ class Author {
         : 0,
     };
   }
+
+  static async findAllAuthorSitemap() {
+    const sql = `SELECT a.id, a.updated_at FROM authors a WHERE a.deleted_at IS NULL`;
+    return await DB.query(sql, []);
+  }
 }
 
 module.exports = Author;

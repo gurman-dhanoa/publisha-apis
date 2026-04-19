@@ -133,6 +133,11 @@ const authorController = {
 
     res.status(200).json(new ApiResponse(200, author, "Author retrieved"));
   }),
+  
+  getAllAuthorsForSitemap: catchAsync(async (req, res) => {
+    const data = await Author.findAllAuthorSitemap();
+    res.status(200).json(new ApiResponse(200, data));
+  }),
 
   update: catchAsync(async (req, res) => {
     if (parseInt(req.params.id) !== req.user.id) {
