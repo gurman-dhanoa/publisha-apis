@@ -185,6 +185,11 @@ class Article {
     const sql = "UPDATE articles SET views_count = views_count + 1 WHERE id = ?";
     await DB.query(sql, [id]);
   }
+
+  static async fetchAllUrlForSitemap() {
+    const sql = `SELECT a.slug, a.updated_at FROM articles a  WHERE a.status = ?`;
+    return await DB.query(sql, ['published']);
+  }
 }
 
 module.exports = Article;

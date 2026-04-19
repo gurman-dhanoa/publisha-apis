@@ -94,6 +94,14 @@ const articleController = {
       }),
     );
   }),
+  
+  getAllArticlesForSitemap: catchAsync(async (req, res) => {
+    const data = await Article.fetchAllUrlForSitemap();
+
+    res.status(200).json(
+      new ApiResponse(200, data),
+    );
+  }),
 };
 
 module.exports = articleController;

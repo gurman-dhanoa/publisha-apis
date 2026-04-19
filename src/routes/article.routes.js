@@ -20,6 +20,11 @@ router.get(
 );
 
 router.get(
+  "/sitemap",
+  articleController.getAllArticlesForSitemap,
+);
+
+router.get(
   "/",
   validate(articleSchema.getAll),
   optionalAuth,
